@@ -6,6 +6,10 @@ This module provides a simple tool for anonymizing a dataset using PySpark. Give
 - L Diversity
 - T Closeness
 
+# TODO for fork:
+- [ ] Implement better span creation, see `anonypy`
+- [ ] Improve span creation to min width 1
+
 ## Demo
 
 Jupyter notebook for each of the following modules are included.
