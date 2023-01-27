@@ -171,7 +171,11 @@ def agg_categorical_column(series):
     return [",".join(l)]
 
 
-def agg_numerical_column(series):
+def agg_numerical_mean(series):
+    return [round(series.mean())]
+
+
+def agg_numerical_range(series):
     minimum = series.min()
     maximum = series.max()
     if maximum == minimum:
@@ -180,14 +184,17 @@ def agg_numerical_column(series):
         string = f"{minimum}-{maximum}"
     return [string]
 
-def anonymizer(df, partitions, feature_columns, sensitive_column, categorical, max_partitions=None):
+def anonymizer(df, partitions, feature_columns, sensitive_column, categorical, max_partitions=None, use_numerical_range=True):
     aggregations = {}
 
     for column in feature_columns:
         if column in categorical:
             aggregations[column] = agg_categorical_column
         else:
-            aggregations[column] = agg_numerical_column
+            if use_numerical_range:
+                aggregations[column] = agg_numerical_range
+            else:
+                aggregations[column] = agg_numerical_mean
     rows = []
 
     for i, partition in enumerate(partitions):
@@ -206,15 +213,15 @@ def anonymizer(df, partitions, feature_columns, sensitive_column, categorical, m
         for sensitive_value, count in sensitive_counts[sensitive_column].items():
             if count == 0:
                 continue
-            values.update({
-                sensitive_column: sensitive_value,
-                'count': count,
-
-            })
+            values.update(
+                {
+                    sensitive_column: sensitive_value,
+                    'count': count,
+                }
+            )
             rows.append(values.copy())
     dfn = pd.DataFrame(rows)
-    pdfn = dfn.sort_values(feature_columns+[sensitive_column])
-    return pdfn
+    return dfn.sort_values(feature_columns+[sensitive_column])
 
 
 # """ --------------------------------------------------------------------------
@@ -435,7 +442,7 @@ def anonymize_w_user(df, partitions, feature_columns, sensitive_column, categori
         if column in categorical:
             aggregations[column] = agg_categorical_column
         else:
-            aggregations[column] = agg_numerical_column
+            aggregations[column] = agg_numerical_range
 
     for i, partition in enumerate(partitions):
         if i % 100 == 1:
