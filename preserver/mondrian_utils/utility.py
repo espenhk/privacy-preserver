@@ -164,7 +164,11 @@ def partition_dataset(df, k, l, t, categorical, feature_columns, sensitive_colum
 
 
 def agg_categorical_column(series):
-    return ','.join(sorted(set(series)))
+    # this is workaround for dtype bug of series
+    series.astype("category")
+
+    l = [str(n) for n in set(series)]
+    return [",".join(l)]
 
 
 def agg_numerical_column(series):
