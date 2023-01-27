@@ -1,9 +1,12 @@
+import pandas
 
 # from pyspark.sql.functions import PandasUDFType, lit, pandas_udf
 from .mondrian_utils.utility import *
 
 
-def k_anonymizer(df, k, feature_columns, sensitive_column, categorical):
+def k_anonymizer(
+        df: pandas.DataFrame, k: int, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -19,7 +22,9 @@ def k_anonymizer(df, k, feature_columns, sensitive_column, categorical):
     return anonymizer(df, partitions, feature_columns, sensitive_column, categorical)
 
 
-def l_diversity_anonymizer(df, k, l, feature_columns, sensitive_column, categorical):
+def l_diversity_anonymizer(
+        df: pandas.DataFrame, k: int, l: int, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -35,7 +40,9 @@ def l_diversity_anonymizer(df, k, l, feature_columns, sensitive_column, categori
     return anonymizer(df, partitions, feature_columns, sensitive_column, categorical)
 
 
-def t_closeness_anonymizer(df, k, t, feature_columns, sensitive_column, categorical):
+def t_closeness_anonymizer(
+        df: pandas.DataFrame, k: int, t: float, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -51,7 +58,9 @@ def t_closeness_anonymizer(df, k, t, feature_columns, sensitive_column, categori
     return anonymizer(df, partitions, feature_columns, sensitive_column, categorical)
 
 
-def k_anonymizer_w_user(df, k, feature_columns, sensitive_column, categorical):
+def k_anonymizer_w_user(
+        df: pandas.DataFrame, k: int, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -64,11 +73,12 @@ def k_anonymizer_w_user(df, k, feature_columns, sensitive_column, categorical):
     partitions = partition_dataset(
         df, k, None, None,  categorical, feature_columns, sensitive_column, full_spans)
 
-    return anonymize_w_user(
-        df, partitions, feature_columns, sensitive_column, categorical)
+    return anonymize_w_user(df, partitions, feature_columns, sensitive_column, categorical)
 
 
-def l_diversity_anonymizer_w_user(df, k, l, feature_columns, sensitive_column, categorical):
+def l_diversity_anonymizer_w_user(
+        df: pandas.DataFrame, k: int, l: int, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -81,11 +91,12 @@ def l_diversity_anonymizer_w_user(df, k, l, feature_columns, sensitive_column, c
     partitions = partition_dataset(
         df, k, l, None,  categorical, feature_columns, sensitive_column, full_spans)
 
-    return anonymize_w_user(
-        df, partitions, feature_columns, sensitive_column, categorical)
+    return anonymize_w_user(df, partitions, feature_columns, sensitive_column, categorical)
 
 
-def t_closeness_anonymizer_w_user(df, k, t, feature_columns, sensitive_column, categorical):
+def t_closeness_anonymizer_w_user(
+        df: pandas.DataFrame, k: int, t: float, feature_columns: list[str], sensitive_column: str, categorical: list[str]
+) -> pandas.DataFrame:
 
     if sensitive_column not in df.columns:
         raise AnonymizeError("No Such Sensitive Column")
@@ -98,8 +109,7 @@ def t_closeness_anonymizer_w_user(df, k, t, feature_columns, sensitive_column, c
     partitions = partition_dataset(
         df, k, None, t,  categorical, feature_columns, sensitive_column, full_spans)
 
-    return anonymize_w_user(
-        df, partitions, feature_columns, sensitive_column, categorical)
+    return anonymize_w_user(df, partitions, feature_columns, sensitive_column, categorical)
 
 
 class Preserver:
@@ -144,7 +154,7 @@ class Preserver:
 
 
     @staticmethod
-    def anonymize_user(df, k, user, usercolumn_name, sensitive_column, categorical, schema, random=False):
+    def anonymize_user(df, k, user, usercolumn_name, sensitive_column, categorical, schema, random=False, use_numerical_range=True):
         a_df = user_anonymizer(
-            df, k, user, usercolumn_name, sensitive_column, categorical, random)
+            df, k, user, usercolumn_name, sensitive_column, categorical, random, use_numerical_range=use_numerical_range)
         return a_df
