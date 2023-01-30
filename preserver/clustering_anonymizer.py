@@ -1,3 +1,4 @@
+import pandas
 import pandas as pd
 import numpy as np
 import time
@@ -15,27 +16,35 @@ from .clustering_utils.cluster_init import ClusterInit
 from .clustering_utils.kmodes import Kmodehelpers
 from .clustering_utils.distance_calculation import Calculator
 
-class Kanonymizer(object):
-    def __init__(self, df, QI_attr, Sensitive_attr, cat_indecies, verbose=1, max_iter=10, anonimize_ratio=1, max_cluster_distance=20):
-        '''
 
-        Attributes:-
-          df :- Pandas Dataframe that will used to anonymize. Type :- Pandas DataFrame
-          QI_attr :- Column names of Quasi Identifiers. Type :- list
-          Sensitive_attr :- Column names of Sensitive Columns
-          verbose : Log details(1) or not(0).Default value is 1. Type : Boolean
-          max_iter :- The maximum iteration number of joining clusters. Default value is 5 .Type :- Integer
-          max_cluster_distance :- The maximum value in cluster distance. Default value is 20. Type :- Interger
-        '''
+class Kanonymizer(object):
+    def __init__(
+            self, df: pandas.DataFrame, qi_attr: list[str], sensitive_attr: list[str], cat_indices: list[int],
+            verbose=True, max_iter=10, anonymize_ratio=1, max_cluster_distance=20):
+        """
+
+        Args:
+            df: Pandas Dataframe that will be used to anonymize. Type : Pandas DataFrame
+            qi_attr: Column names of Quasi Identifiers. Type : list[str]
+            sensitive_attr: Column names of Sensitive Columns. Type : list[str]
+            cat_indices: Indexes of categorical variables. Type: list[int]
+            verbose: Log details (True) or not(False). Default value is True. Type : bool
+            max_iter: The maximum iteration number of joining clusters. Default value is 10. Type : int
+            anonymize_ratio: Ratio to scale anonymization (for instance, k-anonymization will be k*ratio. Default
+                value is 1. Type: float.
+            max_cluster_distance: The maximum value in cluster distance. Default value is 20. Type : int
+        """
+        self.c_centroids = None
         self.nan_replacement_int = 0
         self.nan_replacement_str = ''
-        InputValidator.validate_input(df, QI_attr, Sensitive_attr, cat_indecies, verbose, max_iter,
-                                      anonimize_ratio, max_cluster_distance, self.nan_replacement_int, self.nan_replacement_str)
+        InputValidator.validate_input(df, qi_attr, sensitive_attr, cat_indices, verbose, max_iter,
+                                      anonymize_ratio, max_cluster_distance, self.nan_replacement_int,
+                                      self.nan_replacement_str)
         self.df = df
         self.df_copy = df.copy()
         self.df_second_copy = df.copy()
-        self.QI_attr = QI_attr
-        self.Sensitive_attr = Sensitive_attr
+        self.QI_attr = qi_attr
+        self.Sensitive_attr = sensitive_attr
         self.n_clusters = 0
         self.verbose = verbose
         self.centroids = None
@@ -43,35 +52,41 @@ class Kanonymizer(object):
         self.k_centroids = None
         self.k = 0
         self.max_iter = max_iter
-        self.anonimize_ratio = anonimize_ratio
+        self.anonymize_ratio = anonymize_ratio
         self.max_cluster_distance = max_cluster_distance
         self.cluster_distances = None
         self.factor = 20
 
-    def anonymize(self, k=10, mode='', center_type='fbcg', return_mode='Not_equal', iter=1):
-        '''
-        This method is used to anonymize the Dataset
-        Parameters :- 
-            k = Number of rows that cannot be distinguished from each other
-            mode = if this is 'kmode', clustering will happen using KMODE clustering. Else it will happen in using Pandas Dataframe functions.
-            center_type = Defines the method to choose cluster centers.
-                  If method is not equal to kmode. Three values are possible.
-                      1. 'fcbg' = This method return cluster centroids weight on the probability of row's column values appear in dataframe. Default Value.
-                      2. 'rsc'  = This method will choose centroids weight according to the column that has most number of unique values.
-                      3. 'random = Return cluster centroids in randomly.
-            return_mode = If this value equal to 'equal' ; K anonymization will done with equal member clusters. Default value is 'Not_Equal'
+    def anonymize(self, k=10, mode='', center_type='fbcg', return_mode='Not_equal', iter=1) -> pandas.DataFrame:
+        """
+        This method is used to anonymize the Dataset, using k-anonymization.
+        Args:
+            k: Number of rows that cannot be distinguished from each other. Default value is 10, type: int.
+            mode: if this is 'kmode', clustering will happen using KMODE clustering. Else it will happen in
+                using Pandas Dataframe functions.
+            center_type: Defines the method to choose cluster centers. Values are in {'fcbg', 'rsc', 'random'}, default
+                value is 'fcgb'.
+                 If method is not equal to 'kmode', three values are possible:
+                     1. 'fcbg':  Return cluster centroids weight on the probability of row's column values
+                        appear in dataframe. Default Value.
+                     2. 'rsc': Choose centroids weight according to the column that has the highest of unique values.
+                     3. 'random': Return cluster centroids randomly.
+            return_mode: If this value is 'equal', k-anonymization will be done with equal member clusters.
+                Default value is 'not_equal'
+            iter: number of iterations. Type: int
 
-        return :- 
-            Anonymize dataset. Type :- Pandas DataFrame
+        Returns:
+            k-anonymized dataset. Type : Pandas DataFrame
 
-        '''
-        if (k <= 0):
+        """
+
+        if k <= 0:
             k = 10
-        gv.k_global(k)
+        #gv.k_global(k)
         self.k = int(k)
-        self.n_clusters = len(self.df)//k
+        self.n_clusters = len(self.df) // k
         self.c_centroids = np.zeros(len(self.df))
-        if(self.verbose):
+        if self.verbose:
             print('K :' + str(k))
             print('Mode :' + str(mode))
 
@@ -81,47 +96,46 @@ class Kanonymizer(object):
         center_type = center_type.lower()
         return_mode = return_mode.lower()
 
-        if(mode != 'komde'):
-            if(self.verbose):
-                print("Initializing centroidds")
-            if(center_type == 'rsc'):
+        if mode != 'kmode':
+            if self.verbose:
+                print("Initializing centroids")
+            if center_type == 'rsc':
                 self.centroids = self._random_sample_centroids(unique_rows)
-            elif(center_type == 'random'):
+            elif center_type == 'random':
                 self.centroids = self._select_centroids_using_weighted_column(
                     unique_rows)
             else:
                 self.centroids = self._find_best_cluster_gens(unique_rows)
             self.centroids.reset_index(drop=True, inplace=True)
 
-        while(iter != 0):
-            global row_number
-            row_number = 0
-            iter = iter-1
-            if(mode != 'kmode'):
-                if(self.verbose):
+        for i in range(self.max_iter):
+            if mode != 'kmode':
+                if self.verbose:
                     print('Clustering...')
                 self.df['cluster_number'] = self.df.apply(
                     lambda row: self._clustering1(row), axis=1)
-                if(return_mode == "equal"):
+                if return_mode == "equal":
                     self._adjust_big_clusters1()
                     self._adjust_small_clusters1()
             else:
-                if(center_type not in ['hung,cao']):
+                # TODO these values are not accepted per the docs?
+                if center_type not in ['hung,cao']:
                     center_type = 'random'
-                self.df = self._komode_clustering(
-                    catergorical_indexes=gv.GV['CAT_INDEXES'], type_=center_type, n_init_=self.max_iter, verbose_=self.verbose)
+                self.df = self._kmode_clustering(
+                    categorical_indexes=gv.GV['CAT_INDEXES'], type_=center_type, n_init_=self.max_iter,
+                    verbose=self.verbose)
 
             self._make_anonymize()
             self.anon_k_clusters()
             self.df[gv.GV['QI']] = self.df_second_copy[gv.GV['QI']]
             self.file_write()
-            return self.df[gv.GV['QI']+gv.GV['SA']].applymap(str)
+            return self.df[gv.GV['QI'] + gv.GV['SA']].applymap(str)
 
-    def data_loss(self):
+    def data_loss(self) -> float:
         """
         return complete data_loss
         input is the anonymized dataframe
-        ouput is number between 0 and 1
+        output is number between 0 and 1
         """
         return Dataloss.complete_data_loss(self.df, self.factor)
 
@@ -132,7 +146,7 @@ class Kanonymizer(object):
     #     InputValidator.validate_input(selfdf,QI_attr,Sensitive_attr,verbose,max_iter,anonimize_ratio,max_cluster_distance)
     #     return True
 
-    def _level_cluster(self, cluster_num):
+    def _level_cluster(self, cluster_num: int):
         """
         cluster_num is the number assigned to 
         """
@@ -150,76 +164,90 @@ class Kanonymizer(object):
         Comment
         """
         num_of_iter = 0
-        while(not(self.df['cluster_number'] != -1).all()):
+        while not (self.df['cluster_number'] != -1).all():
             num_of_iter += 1
             df = self.df.loc[self.df['cluster_number'] == -1]
             best_clusters = df.apply(lambda row: self._clustering2(row), axis=1)
-            self.df.at[best_clusters.index,
-                       'cluster_number'] = best_clusters.values
+            self.df.at[best_clusters.index, 'cluster_number'] = best_clusters.values
             self._adjust_big_clusters1()
-            if(num_of_iter >= self.max_iter):
+            if num_of_iter >= self.max_iter:
                 self.df = self.df.loc[self.df['cluster_number'] != -1]
                 break
 
-    def _clustering1(self, row):
+    def _clustering1(self, row: int) -> int:
         """
-        Comment
+        Find best cluster for row in self.df.
+
+        Args:
+            row: Row to check. Type: int
+
+        Returns:
+            Index of best cluster. Type: int
+
         """
-        global row_number
-        row_number += 1
         best_cluster = Clustering.find_best_cluster(self.df, row, self.centroids)
         return best_cluster
 
-    def _clustering2(self, row):
+    def _clustering2(self, row: int) -> int:
         """
-        Comment
+        Second method for returning the best cluster at a given row index.
+
+        Args:
+            row: Row to check. Type: int
+
+        Returns:
+            Index of the best cluster. Type: int
         """
         temp = self.df['cluster_number'].value_counts()
         small_clusters = temp.loc[temp < gv.k].index
-        if (-1 in small_clusters):
+        if -1 in small_clusters:
             small_clusters.drop(-1)
         best_cluster = Clustering.find_best_cluster(
             self.df, row, self.centroids.iloc[small_clusters])
         return best_cluster
 
-    def _komode_clustering(self, catergorical_indexes=[], type_='random', n_init_=3, verbose_=0):
-        '''
-        This method is used to clustering based on KMODE clustering.
+    def _kmode_clustering(self, categorical_indexes=None, type_='random', n_init_=3, verbose=False) -> pandas.DataFrame:
+        """
+        Perform clustering based on KMODE clustering. Uses self.df as the data.
 
-        dataset : The pandas dataframe want to cluster. Type :- Pandas DataFrame
-        catergorical_indexes = index of columns with catergorical type data. Type List 
-        type_ = Method to clustering - Hung or Cao or random. Type String
-        n_clusters_ = number of clusters. Type :- Integer 
-        n_init_ = number of iterations to compare. Type :- Integer 
-        verbose : Log details(1) or not(0). Type : Boolean
-        '''
+        Args:
+            categorical_indexes: index of columns with categorical type data. Type: list[int]
+            type_: Method of clustering - either 'hung', 'cao' or 'random'. Default is 'random'. Type: string
+            n_init_: number of iterations to compare. Type : int
+            verbose: Log extra details (True) or not (False). Default is False. Type : bool
+
+        Returns:
+            Clustered version of self.df. Type: pandas.DataFrame
+        """
+        if categorical_indexes is None:
+            categorical_indexes = []
         km = KModes(self.n_clusters, init=type_,
-                    n_init=n_init_, verbose=verbose_)
+                    n_init=n_init_, verbose=verbose)
         y = km.fit_predict(self.df[gv.GV['QI']],
-                           categorical=catergorical_indexes)
+                           categorical=categorical_indexes)
         columns = pd.DataFrame(km.cluster_centroids_, columns=gv.GV['QI'])
 
-        columns[gv.GV['NUM_COL']] = columns[gv.GV['NUM_COL']
-                                            ].applymap(lambda x: float(x))
-        self.df[gv.GV['NUM_COL']] = self.df[gv.GV['NUM_COL']
-                                            ].applymap(lambda x: float(x))
-        columns[gv.GV['CAT_COL']] = columns[gv.GV['CAT_COL']
-                                            ].applymap(lambda x: str(x))
-        self.df[gv.GV['CAT_COL']] = self.df[gv.GV['CAT_COL']
-                                            ].applymap(lambda x: str(x))
+        columns[gv.GV['NUM_COL']] = columns[gv.GV['NUM_COL']].applymap(lambda x: float(x))
+        self.df[gv.GV['NUM_COL']] = self.df[gv.GV['NUM_COL']].applymap(lambda x: float(x))
+        columns[gv.GV['CAT_COL']] = columns[gv.GV['CAT_COL']].applymap(lambda x: str(x))
+        self.df[gv.GV['CAT_COL']] = self.df[gv.GV['CAT_COL']].applymap(lambda x: str(x))
         self.df['cluster_number'] = list(km.labels_)
+
         non_zero_member_cluster_indices = self.df.groupby('cluster_number').filter(
             lambda grp: len(grp) != 0)['cluster_number'].unique()
         columns = columns.loc[non_zero_member_cluster_indices]
         columns = columns.reset_index()
         index_series = pd.Series(
             columns.index, index=non_zero_member_cluster_indices)
+
         self.c_centroids = columns
         self.df['cluster_number'] = self.df.apply(
             lambda row: index_series.loc[row['cluster_number']], axis=1)
+
         return self.df
 
-    def _find_best_cluster_gens(self, dataframe):
+    # TODO CONT
+    def _find_best_cluster_gens(self, dataframe: pandas.DataFrame):
         '''
         This method return cluster centroids weight on the probability of row's column values appear in dataframe.
         dataframe :- Unique rows in the dataframe. Type :- Pandas Dataframe
@@ -247,7 +275,7 @@ class Kanonymizer(object):
         method :- If this is dataloss, Distance of two clusters is measured by the dataloss of joining, else Distance between cluster centroids. Type :- String
         '''
         result = self._mark_clusters(method='dataloss')
-        if(result == 1):
+        if (result == 1):
             return 1
         else:
             self.mark_less_clusters_to_kclusters()
@@ -258,18 +286,18 @@ class Kanonymizer(object):
         method :- If this is dataloss, Distance of two clusters is measured by the dataloss of joining, else Distance between cluster centroids. Type :- String
         '''
         self.df_second_copy = self.df.copy()
-        if(method == 'dataloss'):
+        if (method == 'dataloss'):
             self.cluster_distances = self._cluster_data_loss()
         else:
             self.cluster_distances = self.less_centroids.apply(
                 lambda row: self.get_distance_centers(row), axis=1)
         iteration_num = 0
-        while(True):
+        while (True):
             less_groups = self.df_second_copy.groupby('cluster_number').filter(
                 lambda x: len(x) < self.k).groupby('cluster_number')
-            if(less_groups.ngroups == 0):
+            if (less_groups.ngroups == 0):
                 return 1
-            elif(iteration_num >= self.max_iter):
+            elif (iteration_num >= self.max_iter):
                 return 0
             else:
                 # if(_DEBUG):                                                                                       ####################################################
@@ -282,15 +310,15 @@ class Kanonymizer(object):
         This method is used to mark cluster centroids which has less than k number of members.
         dataframe :- The dataframe is used to couunt the cluster members. Type Pandas Dataframe
         '''
-        if(dataframe == 'second'):
+        if (dataframe == 'second'):
             dataframe = self.df_second_copy
         else:
             dataframe = self.df
         temp = dataframe['cluster_number'].value_counts()
         self.less_centroids = self.centroids.loc[temp.loc[temp <
-                                                          self.k*self.anonimize_ratio].index]
+                                                          self.k * self.anonymize_ratio].index]
         self.k_centroids = self.centroids.loc[temp.loc[temp >=
-                                                       self.k*self.anonimize_ratio].index]
+                                                       self.k * self.anonymize_ratio].index]
 
     def get_distance_centers(self, cluster_):
         '''
@@ -300,7 +328,8 @@ class Kanonymizer(object):
         categorical_col = self.centroids[gv.GV['CAT_COL']]
         numerical_col = self.centroids[gv.GV['NUM_COL']]
         ranges = numerical_col.max() - numerical_col.min()
-        return np.sum(Calculator.cal_num_col_dist(cluster_[gv.GV['NUM_COL']], numerical_col, ranges, 20), axis=1) + Calculator.cal_cat_col_dist3(cluster_, categorical_col)
+        return np.sum(Calculator.cal_num_col_dist(cluster_[gv.GV['NUM_COL']], numerical_col, ranges, 20),
+                      axis=1) + Calculator.cal_cat_col_dist3(cluster_, categorical_col)
 
     def _cluster_data_loss(self, apply_for='less_clusters', initialize=True):
         '''
@@ -311,7 +340,7 @@ class Kanonymizer(object):
         '''
         categorical_dataloss = np.vectorize(
             Calculator.categorical_dataloss, excluded="cluster_list")
-        if(initialize):
+        if (initialize):
             self.mark_less_n_kcentroids()
         self.less_centroids.sort_index(inplace=True)
         center_groups = self.df.groupby('cluster_number')
@@ -322,10 +351,10 @@ class Kanonymizer(object):
         groups = np.array(groups)
         groups = groups.reshape((groups.shape[0], 1))
         ranges = center_num.max() - center_num.min() + gv.GV['RANGE_FIX']
-        if(apply_for == 'less_clusters'):
+        if (apply_for == 'less_clusters'):
             less_groups = self.df.groupby('cluster_number').filter(
                 lambda x: len(x) < self.k).groupby('cluster_number')
-            if(less_groups.ngroups == 0):
+            if (less_groups.ngroups == 0):
                 return None
             less_lists = less_groups.apply(lambda x: np.unique(
                 np.concatenate(x[gv.GV['CAT_COL']].values).astype(str)))
@@ -343,9 +372,9 @@ class Kanonymizer(object):
                 row[gv.GV['NUM_COL']], center_num, ranges))
             cat_frame_indices = self.centroids.index
         shape = cat_distances.shape
-        cat_distances = cat_distances.reshape(shape[0], shape[1]*shape[2])
+        cat_distances = cat_distances.reshape(shape[0], shape[1] * shape[2])
         cat_frame = pd.DataFrame(cat_distances, index=cat_frame_indices)
-        return cat_frame.add(num_distance, fill_value=gv.GV['QI_LEN']*self.max_cluster_distance)
+        return cat_frame.add(num_distance, fill_value=gv.GV['QI_LEN'] * self.max_cluster_distance)
 
     def mark_less_clusters_to_close_clusters(self, method='dataloss'):
         '''
@@ -378,7 +407,7 @@ class Kanonymizer(object):
         cluster_distances = cluster_distances[k_indices]
 
         try:
-            if(k_indices.size == 1):
+            if (k_indices.size == 1):
                 n_close_centroids = np.argsort(
                     cluster_distances, axis=1).iloc[:, 0]
             else:
@@ -397,7 +426,7 @@ class Kanonymizer(object):
             lambda grp: Kmodehelpers.edit_cluster(grp, n_close_centroids))
 
     def file_write(self, file_name='output.csv', sep_=',', encoding_='utf-8'):
-        self.df[gv.GV['QI']+gv.GV['SA']
+        self.df[gv.GV['QI'] + gv.GV['SA']
                 ].to_csv(file_name, sep=sep_, encoding=encoding_)
 
     def anon_k_clusters(self):
@@ -409,7 +438,7 @@ class Kanonymizer(object):
             Kmodehelpers.numeric_range).applymap(str)
         cat_vals = groups[gv.GV['CAT_COL']].apply(
             lambda row: row.apply(Kmodehelpers.catergorical_range))
-        if(gv.GV['NUM_COL'] != []):
+        if (gv.GV['NUM_COL'] != []):
             anom_vals = num_vals.join(cat_vals)[gv.GV['QI']]
         else:
             anom_vals = cat_vals.join(num_vals)[gv.GV['QI']]
@@ -432,13 +461,13 @@ class LDiversityAnonymizer():
         self.quasi_identifiers = quasi_identifiers
         self.verbose = verbose
 
-########### Methods to write pandas dataframe to a file  #########################
+    ########### Methods to write pandas dataframe to a file  #########################
 
     def file_write(self, file_name='output.csv', sep_=',', encoding_='utf-8'):
         self.df[self.quasi_identifiers +
                 self.sensitive_attributes].to_csv(file_name, sep=sep_, encoding=encoding_)
 
-########## Method to perform L Diversity #########################################
+    ########## Method to perform L Diversity #########################################
 
     def make_anonymize(self):
         l_diverse_rows = self.df.groupby(self.quasi_identifiers).filter(
@@ -452,10 +481,10 @@ class LDiversityAnonymizer():
             accept = accept and len(grp[column].unique()) >= self.l
         return accept
 
-######### Public method  ########################################################
+    ######### Public method  ########################################################
 
     def anonymize(self, l=2):
-        if(l < 2):
+        if (l < 2):
             l = 2
         self.l = int(l)
         self.make_anonymize()
@@ -473,13 +502,13 @@ class TClosenessAnonymizer():
         self.verbose = verbose
         self.thresholds = None
 
-########### Methods to write pandas dataframe to a file  #########################
+    ########### Methods to write pandas dataframe to a file  #########################
 
     def file_write(self, file_name='output.csv', sep_=',', encoding_='utf-8'):
         self.df[self.quasi_identifiers +
                 self.sensitive_attributes].to_csv(file_name, sep=sep_, encoding=encoding_)
 
-########## Method to perform T Closeness #########################################
+    ########## Method to perform T Closeness #########################################
 
     def make_anonymize(self):
         self.define_thresholds()
@@ -490,23 +519,23 @@ class TClosenessAnonymizer():
 
     def define_thresholds(self):
         thresholds = {column: self.df[column].value_counts(
-        )/len(self.df) for column in self.sensitive_attributes}
+        ) / len(self.df) for column in self.sensitive_attributes}
         self.thresholds = thresholds
 
     def check_thresholds(self, grp):
         length_cluster = len(grp)
         accept = True
         for column in self.sensitive_attributes:
-            grp_thresholds = grp[column].value_counts()/length_cluster
+            grp_thresholds = grp[column].value_counts() / length_cluster
         for element in grp_thresholds.keys():
             accept = accept and (
                 grp_thresholds[element]) + self.t >= self.thresholds[column][element]
         return accept
 
-######### Public method  ########################################################
+    ######### Public method  ########################################################
 
     def anonymize(self, t=0.2):
-        if(t >= 1):
+        if (t >= 1):
             self.t = 0.2
         else:
             self.t = t

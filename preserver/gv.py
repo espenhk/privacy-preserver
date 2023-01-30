@@ -2,6 +2,7 @@ def init(gv):
     global GV
     GV = gv
 
+
 def k_global(val):
-    global k 
+    global k
     k = val

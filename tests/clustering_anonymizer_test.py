@@ -44,8 +44,8 @@ class KmodeTest(unittest.TestCase):
         del self.anonymizer1
 
     def test_komode_clustering(self):
-        self.anonymizer1._komode_clustering(
-            catergorical_indexes=self.CAT_INDEXES)
+        self.anonymizer1._kmode_clustering(
+            categorical_indexes=self.CAT_INDEXES)
         self.assertTrue(self.anonymizer1.df.groupby('cluster_number').ngroups <= 10)
 
 

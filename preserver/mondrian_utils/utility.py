@@ -140,7 +140,7 @@ def get_global_freq(df: pandas.DataFrame, sensitive_column: str) -> dict[int, fl
 def partition_dataset(
         df: pandas.DataFrame, k: int, l: int, t: float, categorical: list[str], feature_columns: list[str],
         sensitive_column: str, scale: list[float]
-) -> list[pandas.Index]:
+) -> list[pandas.DataFrame]:
     finished_partitions = []
     global_freqs = {}
     if t is not None:
@@ -154,26 +154,20 @@ def partition_dataset(
         for column, span in sorted(spans.items(), key=lambda x: -x[1]):
             lp, rp = split(df, categorical, partition, column)
             if l is not None:
-                if not is_k_anonymous(lp, k) or not is_k_anonymous(rp, k) or not is_l_diverse(df, lp, sensitive_column,
-                                                                                              l) or not is_l_diverse(df,
-                                                                                                                     rp,
-                                                                                                                     sensitive_column,
-                                                                                                                     l):
+                if not is_k_anonymous(lp, k) \
+                        or not is_k_anonymous(rp, k) \
+                        or not is_l_diverse(df, lp, sensitive_column, l) \
+                        or not is_l_diverse(df, rp, sensitive_column, l):
                     continue
             if l is None:
                 if t is None:
                     if not is_k_anonymous(lp, k) or not is_k_anonymous(rp, k):
                         continue
                 if t is not None:
-                    if not is_k_anonymous(lp, k) or not is_k_anonymous(rp, k) or not is_t_close(df, lp, categorical,
-                                                                                                sensitive_column,
-                                                                                                global_freqs,
-                                                                                                t) or not is_t_close(df,
-                                                                                                                     rp,
-                                                                                                                     categorical,
-                                                                                                                     sensitive_column,
-                                                                                                                     global_freqs,
-                                                                                                                     t):
+                    if not is_k_anonymous(lp, k) \
+                            or not is_k_anonymous(rp, k) \
+                            or not is_t_close(df, lp, categorical, sensitive_column, global_freqs, t) \
+                            or not is_t_close(df, rp, categorical, sensitive_column, global_freqs, t):
                         continue
             partitions.extend((lp, rp))
             break
@@ -259,13 +253,13 @@ def get_intersection(
     intersect_df = pd.DataFrame()
     for column in columns:
         i += 1
-        if (i > threshold):
+        if i > threshold:
             break
         val = udf[column].value_counts().idxmax()
         tempdf = df.loc[(df[column] == val) & (df[user_column_name] != user)]
-        if (intersect_df.empty):
+        if intersect_df.empty:
             intersect_df = tempdf
-        if (not tempdf.empty):
+        if not tempdf.empty:
             intersect_df = tempdf.reset_index().merge(
                 intersect_df, how='inner').set_index('index')
 
@@ -381,30 +375,35 @@ def anonymize_given_user(
             '_common88column_', sort=False).agg(aggregations, squeeze=False)
 
 
-def user_anonymizer(df, k, user, usercolumn_name, sensitive_column, categorical, random=False, use_numerical_range=True):
-    if ((sensitive_column not in df.columns) or (usercolumn_name not in df.columns)):
+def user_anonymizer(
+        df: pandas.DataFrame, k: int, user: str, user_column_name: str, sensitive_column: str, categorical: list[str],
+        random=False, use_numerical_range=True
+) -> pandas.DataFrame:
+    if (sensitive_column not in df.columns) or (user_column_name not in df.columns):
         raise AnonymizeError("No Such Sensitive Column")
 
-    df[usercolumn_name] = df[usercolumn_name].astype(str)
+    df[user_column_name] = df[user_column_name].astype(str)
 
-    userdf = df.loc[df[usercolumn_name] == str(user)]
+    user_df = df.loc[df[user_column_name] == str(user)]
     user = str(user)
-    if (userdf.empty):
+    if user_df.empty:
         raise AnonymizeError("No user found.")
 
-    rowcount = userdf.shape[0]
-    columns = userdf.columns.drop([usercolumn_name, sensitive_column])
+    rowcount = user_df.shape[0]
+    columns = user_df.columns.drop([user_column_name, sensitive_column])
 
-    if (rowcount >= k):
-        requiredRows = 1
+    if rowcount >= k:
+        required_rows = 1
     else:
-        requiredRows = k - rowcount
+        required_rows = k - rowcount
     intersect_df = common_df(
-        df, userdf, user, requiredRows, columns, usercolumn_name, random)
+        df, user_df, user, required_rows, columns, user_column_name, random)
 
-    if ((not intersect_df.empty) & (intersect_df.shape[0] >= requiredRows)):
-        finaldf = pd.concat([userdf, intersect_df])
-        anonymize_given_user(df, finaldf, user, usercolumn_name, columns, categorical, use_numerical_range=use_numerical_range)
+    if (not intersect_df.empty) & (intersect_df.shape[0] >= required_rows):
+        final_df = pd.concat([user_df, intersect_df])
+        anonymize_given_user(
+            df, final_df, user, user_column_name, columns, categorical, use_numerical_range=use_numerical_range
+        )
     else:
         raise (AnonymizeError("Can't K Anonymize the user for given K value"))
     return df
@@ -413,13 +412,16 @@ def user_anonymizer(df, k, user, usercolumn_name, sensitive_column, categorical,
 # """ --------------------------------------------------------------------------
 # Anonymize with all rows
 # """ --------------------------------------------------------------------------
-def agg_columns(df, partdf, indexes, columns, categorical):
+def agg_columns(
+        df: pandas.DataFrame, part_df: pandas.DataFrame, indexes: list[int], columns: list[str], categorical: list[str]
+):
     for column in columns:
 
         if column not in categorical:
-            partdf[column] = pd.to_numeric(partdf[column])
-        valueList = partdf[column].unique()
+            part_df[column] = pd.to_numeric(part_df[column])
+        valueList = part_df[column].unique()
 
+        # TODO FIX
         if column in categorical:
             string = ','.join(valueList)
             df[column] = df[column].astype(str)
@@ -428,38 +430,38 @@ def agg_columns(df, partdf, indexes, columns, categorical):
         if column not in categorical:
             minimum = min(valueList)
             maximum = max(valueList)
-            if (maximum == minimum):
+            if maximum == minimum:
                 string = str(maximum)
             else:
                 string = ''
-                maxm = str(maximum)
-                minm = str(minimum)
-                if (len(minm) == 1):
-                    if (minimum >= 5):
+                max_val = str(maximum)
+                min_val = str(minimum)
+                if len(min_val) == 1:
+                    if minimum >= 5:
                         string = '5-'
                     else:
                         string = '0-'
                 else:
-                    if (minm[-1] == '0'):
-                        string = minm + "-"
+                    if min_val[-1] == '0':
+                        string = min_val + "-"
                     else:
-                        min_start = minm[:-1]
-                        if (minimum >= int(min_start + '5')):
+                        min_start = min_val[:-1]
+                        if minimum >= int(min_start + '5'):
                             string = min_start + '5-'
                         else:
                             string = min_start + '0-'
 
-                if (len(maxm) == 1):
-                    if (maximum >= 5):
+                if len(max_val) == 1:
+                    if maximum >= 5:
                         string += "10"
                     else:
                         string += '5'
                 else:
-                    if (maxm[-1] == '0'):
-                        string += maxm
+                    if max_val[-1] == '0':
+                        string += max_val
                     else:
-                        max_start = maxm[:-1]
-                        if (maximum > int(max_start + '5')):
+                        max_start = max_val[:-1]
+                        if maximum > int(max_start + '5'):
                             string += str(int(max_start + '0') + 10)
                         else:
                             string += max_start + '5'
