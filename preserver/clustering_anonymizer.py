@@ -42,6 +42,7 @@ class Kanonymizer:
         InputValidator.validate_input(df, qi_attr, sensitive_attr, cat_indices, verbose, max_iter,
                                       anonymize_ratio, max_cluster_distance, self.nan_replacement_int,
                                       self.nan_replacement_str)
+
         self.df = df
         self.df_copy = df.copy()
         self.df_second_copy = df.copy()
@@ -59,17 +60,17 @@ class Kanonymizer:
         self.cluster_distances = None
         self.factor = 20
 
-    def anonymize(self, k=10, mode='', center_type='fbcg', return_mode='Not_equal', iter=1) -> pandas.DataFrame:
+    def anonymize(self, k=10, mode='', center_type='fcgb', return_mode='not_equal', iter=1) -> pandas.DataFrame:
         """
         This method is used to anonymize the Dataset, using k-anonymization.
         Args:
             k: Number of rows that cannot be distinguished from each other. Default value is 10, type: int.
             mode: if this is 'kmode', clustering will happen using KMODE clustering. Else it will happen in
                 using Pandas Dataframe functions.
-            center_type: Defines the method to choose cluster centers. Values are in {'fcbg', 'rsc', 'random'}, default
+            center_type: Defines the method to choose cluster centers. Values are in {'fcgb', 'rsc', 'random'}, default
                 value is 'fcgb'.
                  If method is not equal to 'kmode', three values are possible:
-                     1. 'fcbg':  Return cluster centroids weight on the probability of row's column values
+                     1. 'fcgb':  Return cluster centroids weight on the probability of row's column values
                         appear in dataframe. Default Value.
                      2. 'rsc': Choose centroids weight according to the column that has the highest of unique values.
                      3. 'random': Return cluster centroids randomly.
@@ -79,7 +80,6 @@ class Kanonymizer:
 
         Returns:
             k-anonymized dataset. Type : Pandas DataFrame
-
         """
 
         if k <= 0:
@@ -131,6 +131,7 @@ class Kanonymizer:
             self.anon_k_clusters()
             self.df[gv.GV['QI']] = self.df_second_copy[gv.GV['QI']]
             self.file_write()
+
             return self.df[gv.GV['QI'] + gv.GV['SA']].applymap(str)
 
     def data_loss(self) -> float:
@@ -561,7 +562,7 @@ class LDiversityAnonymizer:
             verbose: Log details (True) or not(False). Default value is True. Type : bool
         """
         self.l = None
-        InputValidator.L_Diverse_Validate(df, quasi_identifiers, sensitive_attributes)
+        InputValidator.l_diverse_validate(df, quasi_identifiers, sensitive_attributes)
 
         self.df = df[quasi_identifiers + sensitive_attributes]
         self.sensitive_attributes = sensitive_attributes
@@ -645,7 +646,7 @@ class TClosenessAnonymizer:
             verbose: Log details (True) or not(False). Default value is True. Type : bool
         """
         self.t = None
-        InputValidator.L_Diverse_Validate(df, quasi_identifiers, sensitive_attributes)
+        InputValidator.l_diverse_validate(df, quasi_identifiers, sensitive_attributes)
 
         self.df = df[quasi_identifiers + sensitive_attributes]
         self.sensitive_attributes = sensitive_attributes
